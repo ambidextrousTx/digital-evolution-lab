@@ -1,4 +1,10 @@
+from dataclasses import dataclass
+import numpy as np
+
+
+@dataclass
 class Individual:
-    def __init__(self, genome):
-        self.genome = genome
-        self.fitness = None
+    '''A genome is always a Numpy vector.
+    The framework is dimension-agnostic'''
+    genome: np.ndarray
+    fitness: float | None = None
