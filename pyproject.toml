@@ -12,3 +12,11 @@ dependencies = [
     "uvicorn>=0.41.0",
     "websockets>=16.0",
 ]
+
+[tool.setuptools.packages.find]
+where = ["./backend"]
+include = ["*"]
+exclude = []
+
+[tool.uv]
+package = true
