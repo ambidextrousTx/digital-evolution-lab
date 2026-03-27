@@ -1,60 +1,97 @@
-import './style.css'
-import typescriptLogo from './assets/typescript.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import { setupCounter } from './counter.ts'
+import * as THREE from 'three';
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${typescriptLogo}" class="framework" alt="TypeScript logo"/>
-    <img src=${viteLogo} class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.ts</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
 
-<div class="ticks"></div>
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src=${viteLogo} alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://www.typescriptlang.org" target="_blank">
-          <img class="button-icon" src="${typescriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+camera.position.set(0, 10, 20);
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(10, 10, 10);
+scene.add(light);
+
+const ambient = new THREE.AmbientLight(0x404040);
+scene.add(ambient);
+
+const size = 20;
+const segments = 200;
+
+const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+geometry.rotateX(-Math.PI / 2);
+
+function fitness(x: number) {
+  return x * Math.sin(10 * x) + x * Math.cos(2 * x);
+}
+
+const positions = geometry.attributes.position;
+
+for (let i = 0; i < positions.count; i++) {
+  const x = positions.getX(i);
+  const z = positions.getZ(i);
+
+  const y = fitness(x);
+
+  positions.setY(i, y);
+}
+
+geometry.computeVertexNormals();
+
+const material = new THREE.MeshStandardMaterial({
+  color: 0x00ffcc,
+  wireframe: false,
+  side: THREE.DoubleSide,
+});
+
+const mesh = new THREE.Mesh(geometry, material);
+scene.add(mesh);
+
+const popSize = 100;
+
+const positionsArray = new Float32Array(popSize * 3);
+
+const geometryPoints = new THREE.BufferGeometry();
+geometryPoints.setAttribute(
+  'position',
+  new THREE.BufferAttribute(positionsArray, 3)
+);
+
+const materialPoints = new THREE.PointsMaterial({
+  color: 0xff5555,
+  size: 0.2,
+});
+
+const points = new THREE.Points(geometryPoints, materialPoints);
+scene.add(points);
+
+function updatePopulation(genomes: number[]) {
+  for (let i = 0; i < genomes.length; i++) {
+    const x = genomes[i];
+    const y = fitness(x);
+
+    positionsArray[i * 3 + 0] = x;
+    positionsArray[i * 3 + 1] = y + 0.2;
+    positionsArray[i * 3 + 2] = 0;
+  }
+
+  geometryPoints.attributes.position.needsUpdate = true;
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  mesh.rotation.y += 0.002;
+
+  renderer.render(scene, camera);
+}
+
+animate();
