@@ -86,8 +86,26 @@ function updatePopulation(genomes: number[]) {
   geometryPoints.attributes.position.needsUpdate = true;
 }
 
+let mockPopulation = Array.from({ length: popSize }, () =>
+  (Math.random() - 0.5) * 20
+);
+
+function evolveMockPopulation() {
+  mockPopulation = mockPopulation.map(x => {
+    // drift toward peak near ~6.4
+    const target = 6.4;
+    const drift = (target - x) * 0.02;
+    const noise = (Math.random() - 0.5) * 0.3;
+
+    return x + drift + noise;
+  });
+
+  updatePopulation(mockPopulation);
+}
+
 function animate() {
   requestAnimationFrame(animate);
+  evolveMockPopulation();
 
   mesh.rotation.y += 0.002;
 
