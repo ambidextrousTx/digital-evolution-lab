@@ -1,92 +1,85 @@
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor
+from typing import List, Tuple
+from core.individual import Individual
+import random
 
 
-def mutate_gaussian(genomes, sigma=0.1):
-    '''Vectorized no-loop mutation'''
-    noise = np.random.normal(0, sigma, genomes.shape)
-    return genomes + noise
+class GeneticAlgorithm:
+    def __init__(self,
+                 population_size: int = 100,
+                 genome_length: int = 50,
+                 mutation_rate: float = 0.01,
+                 crossover_rate: float = 0.7,
+                 elitism: int = 2):
+        self.population_size = population_size
+        self.genome_length = genome_length
+        self.mutation_rate = mutation_rate
+        self.crossover_rate = crossover_rate
+        self.elitism = elitism
+        self.population: List[Individual] = []
+        self.generation = 0
+        self.best_history = []
 
+    def initialize_population(self):
+        """Random binary genome - like primordial soup"""
+        genomes = np.random.randint(0, 2, size=(self.population_size,
+                                                self.genome_length))
+        self.population = [Individual(genome) for genome in genomes]
 
-def perform_individual_crossover(parent_a, parent_b):
-    alpha = np.random.rand()
-    child = alpha * parent_a + (1 - alpha) * parent_b
-    return child
+    def fitness_one_max(self, genome: np.ndarray) -> float:
+        """Number of 1s - simple fitness computation"""
+        return np.sum(genome)
 
+    def select_parent(self) -> Individual:
+        """Tournament selection"""
+        tournament = random.sample(self.population, 3)
+        return max(tournament, key=lambda individual: individual.fitness)
 
-def perform_population_crossover(genomes):
-    genomes = genomes.copy()
-    np.random.shuffle(genomes)
-    children = []
-    for i in range(0, len(genomes), 2):
-        a = genomes[i]
-        b = genomes[i+1]
-        child1 = perform_individual_crossover(a, b)
-        child2 = perform_individual_crossover(b, a)
-        children.append(child1)
-        children.append(child2)
+    def crossover(self, parent1: Individual,
+                  parent2: Individual) -> Tuple[Individual, Individual]:
+        """Single-point crossover"""
+        if random.random() > self.crossover_rate:
+            return parent1, parent2  # No crossover
 
-    return np.array(children)
+        point = random.randint(1, self.genome_length - 1)
+        child1_genome = np.concatenate([parent1.genome[:point],
+                                        parent2.genome[point:]])
+        child2_genome = np.concatenate([parent2.genome[:point],
+                                        parent1.genome[point:]])
+        return Individual(child1_genome), Individual(child2_genome)
 
+    def mutate(self, individual: Individual):
+        """Bit-flip mutation - random genetic variation"""
+        for i in range(self.genome_length):
+            if random.random() < self.mutation_rate:
+                individual.genome[i] = 1 - individual.genome[i]
 
-def fitness_function(genome):
-    x = genome[0]
-    return x * np.sin(10 * x) + x * np.cos(2 * x)
+    def evolve_one_generation(self):
+        """One full generation of selection + reproduction + mutation"""
+        # Evaluate everyone
+        for individual in self.population:
+            individual.evaluate(self.fitness_one_max)
 
+        # Record the best
+        best = max(self.population, key=lambda individual: individual.fitness)
+        self.best_history.append(best.fitness)
 
-def evaluate_population(genomes, fitness_function, workers=8):
-    with ProcessPoolExecutor(max_workers=workers) as executor:
-        fitness = executor.map(fitness_function, genomes)
+        # Elitism - best organisms survive automatically
+        new_population = sorted(self.population,
+                                key=lambda individual: individual.fitness,
+                                reverse=True)[:self.elitism]
 
-    return np.array(list(fitness))
+        while len(new_population) < self.population_size:
+            parent1 = self.select_parent()
+            parent2 = self.select_parent()
+            child1, child2 = self.crossover(parent1, parent2)
 
+            self.mutate(child1)
+            self.mutate(child2)
 
-def select(genomes, fitness, k=3):
-    '''Perform tournament selection'''
-    population = len(genomes)
-    selected = []
+            new_population.extend([child1, child2])
 
-    for _ in range(population):
-        idx = np.random.choice(population, k, replace=False)
-        best = idx[np.argmax(fitness[idx])]
-        selected.append(genomes[best])
+        # Trim if we overshot due to elitism
+        self.population = new_population[:self.population_size]
+        self.generation += 1
 
-    return np.array(selected)
-
-
-def run_ga(population, fitness_fn, generations):
-    '''
-    Example output:
-    Gen 1   best=2.4  mean=0.2
-    Gen 10  best=5.8  mean=3.1
-    Gen 50  best=7.9  mean=7.3
-    '''
-    for g in range(generations):
-        fitness = evaluate_population(population.individuals, fitness_fn)
-
-        # Keep the best citizens intact
-        elite_size = 2
-        elite_indices = np.argsort(fitness)[-elite_size:]
-        elites = population.individuals[elite_indices]
-
-        population.fitness = fitness
-        selected = select(population.individuals, fitness)
-        offspring = perform_population_crossover(selected)
-        sigma = max(0.01, 0.1 * (0.99 ** g))
-        mutated = mutate_gaussian(offspring, sigma=sigma)
-        mutated[:elite_size] = elites
-
-        population.individuals = mutated
-        population.generation += 1
-
-        best_fitness = np.max(fitness)
-        mean_fitness = np.mean(fitness)
-
-        print(f'Gen {population.generation}\tbest={best_fitness:.4f}\tmean={mean_fitness:.4f}')
-
-        best_idx = np.argmax(fitness)
-        best_genome = population.individuals[best_idx]
-
-        print(f'Gen {population.generation}\tbest={best_fitness:.4f}\tx={best_genome[0]:.4f}')
-
-    return population
